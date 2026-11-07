@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {ProgressStore,validateProgress} from '../public/progress.js';
+const id='loc-0123456789abcdef',other='loc-fedcba9876543210';
+function memory(){return {value:null,getItem(){return this.value},setItem(k,v){this.value=v},removeItem(){this.value=null}}}
+test('blank catalog has no inherited progress',()=>{let p=new ProgressStore(memory());p.bindCatalog([{id}]);assert.deepEqual(p.apply([{id}]),[{id,visited:false,cleared:false,notes:''}])});
+test('manual changes survive reload, save import only adds visits',()=>{let s=memory(),p=new ProgressStore(s);p.bindCatalog([{id}]);p.edit(id,{cleared:true,notes:'Example note'});p.markVisited([id]);p=new ProgressStore(s);p.bindCatalog([{id}]);assert.deepEqual(p.apply([{id}])[0],{id,visited:true,cleared:true,notes:'Example note'})});
+test('import validates first, preserves existing notes and skips unknown ids',()=>{let p=new ProgressStore(memory());p.bindCatalog([{id}]);p.edit(id,{notes:'Keep'});assert.equal(p.import({version:1,locations:{[id]:{visited:true},[other]:{cleared:true}}}),1);assert.equal(p.records[id].notes,'Keep');assert.throws(()=>p.import({version:1,locations:{[id]:{visited:'true'}}}));assert.equal(p.records[id].visited,true)});
+test('failed storage write does not report success or mutate in-memory state',()=>{let s=memory(),p=new ProgressStore(s);p.bindCatalog([{id}]);s.setItem=()=>{throw Error('Full')};assert.throws(()=>p.edit(id,{visited:true}),/Full/);assert.deepEqual(p.records,{})});
+test('rejects extra properties and prototype-shaped keys',()=>{assert.throws(()=>validateProgress(JSON.parse('{"version":1,"locations":{"__proto__":{"visited":true}}}')));assert.throws(()=>validateProgress({version:1,locations:{[id]:{url:'https://example.invalid'}}}))});
+test('export is a detached backup and reset removes data',()=>{let p=new ProgressStore(memory());p.bindCatalog([{id}]);p.edit(id,{visited:true});let backup=p.export();backup.locations[id].visited=false;assert.equal(p.records[id].visited,true);p.clear();assert.deepEqual(p.records,{})});

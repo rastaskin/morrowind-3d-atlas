@@ -1,0 +1,4 @@
+numpy>=1.24,<3
+Pillow>=10,<13
+PyFFI==2.2.3
+fonttools[woff]>=4.40,<5
