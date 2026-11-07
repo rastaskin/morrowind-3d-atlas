@@ -54,3 +54,16 @@ button:not(:disabled):active{color:#fff0c7;background-color:#30271a}.location:no
 .backup-actions{display:flex;flex-wrap:wrap;gap:7px}.backup-actions button,.backup-actions .file-button{font:17px/1.15 MagicCards,Georgia,serif;border:2px solid #796745;border-image:var(--mw-thin) 2 / 2px / 0 stretch;color:var(--mw-text);background:#090908;padding:5px 7px;min-height:30px;cursor:pointer}
 #demoBanner{position:absolute;top:120px;left:24px;padding:6px 12px;border:2px solid #aa945d;background:#171105dd;color:#f4d96a;font-size:18px;pointer-events:none;z-index:2}
 .refresh span{max-width:600px}.file-button:has(input:disabled){opacity:.6;cursor:wait}
+
+.lore-section{margin:16px 0 18px;padding:12px 0;border-top:1px solid #796745;border-bottom:1px solid #796745;overflow-wrap:anywhere}
+.lore-section h4{margin:0 0 8px;color:var(--mw-bright);font-size:24px;font-weight:normal}
+.lore-section .lore-text{margin:8px 0 10px;font-size:20px;line-height:1.28;color:var(--mw-text)}
+.lore-section .lore-meta,.lore-section .lore-missing{font-size:16px;line-height:1.35;margin:6px 0;color:#b6a483}
+.lore-section .lore-missing{color:#ddc391}
+.lore-section details{margin:10px 0 4px}
+.lore-section summary{cursor:pointer;color:var(--mw-gold);font-size:18px;line-height:1.3;min-height:28px;padding:3px 0}
+.lore-section summary:focus-visible,.lore-section a:focus-visible{outline:1px solid var(--mw-bright);outline-offset:3px}
+.lore-section .lore-sources{font-size:16px}
+.lore-sources ul{padding-left:18px;margin:4px 0;line-height:1.5}
+.lore-sources a{color:#cfb784;text-underline-offset:3px}
+@media(min-width:1000px){#detail{top:120px;width:400px;max-height:calc(100% - 145px)}}

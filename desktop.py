@@ -4,7 +4,7 @@ import argparse,contextlib,datetime,io,json,os,queue,runpy,subprocess,sys,thread
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import unquote,urlsplit
 
-VERSION='1.1.0'
+VERSION='1.2.0'
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/'bundle-public' if getattr(sys,'frozen',False) else ROOT/'public'
 SCRIPTS=ROOT/'scripts'
@@ -45,8 +45,10 @@ def self_test(args):
   import tkinter
   assert (PUBLIC/'index.html').is_file() and (SCRIPTS/'build_3d.py').is_file()
   assert (PUBLIC/'catalog.json').is_file() and np.isfinite(np.array([1.,2.])).all()
+  assert (PUBLIC/'lore.js').is_file()
+  lore=json.loads((PUBLIC/'lore.json').read_text(encoding='utf8'));assert lore['schema']==1 and len(lore['entries'])>0
   im=Image.new('RGBA',(32,32),(0,0,0,0));buf=io.BytesIO();im.save(buf,format='PNG');assert Image.open(io.BytesIO(buf.getvalue())).size==(32,32)
-  checks=['bundled UI','numpy','Pillow PNG','fontTools','NIF schema','Tk']
+  checks=['bundled UI','bundled lore','numpy','Pillow PNG','fontTools','NIF schema','Tk']
   if args.data_files:
    os.environ['MORROWIND_DATA_DIR']=str(args.data_files.resolve());sys.path.insert(0,str(SCRIPTS));from game_assets import Assets
    assets=Assets();old=N.NiGeometryData.__init__

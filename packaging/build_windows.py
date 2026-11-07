@@ -17,7 +17,7 @@ def main():
  compiler=next((x for x in candidates if x and x.is_file()),None)
  if not compiler:raise SystemExit('Inno Setup 6 compiler not found. Supply --iscc or install JRSoftware.InnoSetup.')
  subprocess.run([str(compiler),str(ROOT/'packaging/installer.iss')],cwd=ROOT,check=True)
- installer=ROOT/'release/Morrowind-3D-Atlas-Setup-1.1.0-win-x64.exe';digest=hashlib.sha256(installer.read_bytes()).hexdigest()
+ installer=ROOT/'release/Morrowind-3D-Atlas-Setup-1.2.0-win-x64.exe';digest=hashlib.sha256(installer.read_bytes()).hexdigest()
  (ROOT/'release/SHA256SUMS.txt').write_text(digest+'  '+installer.name+'\n',encoding='ascii')
  print(json.dumps({'installer':installer.name,'bytes':installer.stat().st_size,'sha256':digest}))
 if __name__=='__main__':main()

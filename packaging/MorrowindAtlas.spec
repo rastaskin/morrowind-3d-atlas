@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 root=Path(SPECPATH).parent
 data=[]
-for name in ['index.html','app.js','map3d.js','progress.js','save-parser.js','catalog.json','style.css','game-ui.css']:
+for name in ['index.html','app.js','map3d.js','progress.js','save-parser.js','lore.js','lore.json','catalog.json','style.css','game-ui.css']:
     data.append((str(root/'public'/name),'bundle-public'))
 for name in ['three.module.js','three.core.js','OrbitControls.js','LICENSE-three.txt']:
     data.append((str(root/'public/vendor'/name),'bundle-public/vendor'))
