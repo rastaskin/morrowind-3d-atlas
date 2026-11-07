@@ -29,3 +29,7 @@ private/
 *.log
 .DS_Store
 Thumbs.db
+build/
+dist/
+release/
+packaging/atlas.ico
