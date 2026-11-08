@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import unquote,urlsplit
 from updater import check_latest,download_release,install_release,UpdateError
 
-VERSION='1.3.0'
+VERSION='1.3.1'
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/'bundle-public' if getattr(sys,'frozen',False) else ROOT/'public'
 SCRIPTS=ROOT/'scripts'

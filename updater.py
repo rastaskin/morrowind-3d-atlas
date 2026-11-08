@@ -18,6 +18,7 @@ class Release:
  url:str
  size:int
  sha256:str
+ api_url:str=''
 
 def version_tuple(value):
  match=re.fullmatch(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)',value or '')
@@ -54,7 +55,9 @@ def release_from_metadata(data,current_version):
  if not isinstance(digest,str) or not re.fullmatch(r'sha256:[0-9a-fA-F]{64}',digest):raise UpdateError('У установщика нет контрольной суммы SHA-256. Обновление не будет установлено.')
  size=asset.get('size')
  if type(size) is not int or not 0<size<=MAX_INSTALLER_SIZE:raise UpdateError('Недопустимый размер установщика.')
- return Release(number,filename,url,size,digest[7:].lower())
+ api_url=asset.get('url','')
+ if api_url and (type(asset.get('id')) is not int or asset['id']<=0 or api_url!=f"https://api.github.com/repos/{REPOSITORY}/releases/assets/{asset['id']}"):raise UpdateError('Недопустимый API-адрес установщика.')
+ return Release(number,filename,url,size,digest[7:].lower(),api_url)
 
 def check_latest(current_version):
  try:
@@ -80,13 +83,14 @@ def download_release(release,cache,current_version,on_progress=lambda done,total
  version_tuple(release.version)
  expected=f'Morrowind-3D-Atlas-Setup-{release.version}-win-x64.exe'
  if release.filename!=expected or not trusted_url(release.url) or not release.url.startswith(f'https://github.com/{REPOSITORY}/releases/download/') or not re.fullmatch(r'[0-9a-f]{64}',release.sha256) or not 0<release.size<=MAX_INSTALLER_SIZE:raise UpdateError('Некорректные данные установщика.')
+ if release.api_url and not re.fullmatch(re.escape(f'https://api.github.com/repos/{REPOSITORY}/releases/assets/')+r'[1-9][0-9]*',release.api_url):raise UpdateError('Недопустимый API-адрес установщика.')
  directory=Path(cache).resolve()/'updates';directory.mkdir(parents=True,exist_ok=True)
  target=directory/release.filename;partial=target.with_suffix('.exe.part')
  if target.is_file() and target.stat().st_size==release.size and file_digest(target)==release.sha256:
   on_progress(release.size,release.size);return target
  try:
   count=0;digest=hashlib.sha256()
-  with open_url(release.url,current_version) as response,partial.open('wb') as stream:
+  with open_url(release.api_url or release.url,current_version) as response,partial.open('wb') as stream:
    while True:
     if cancel is not None and cancel.is_set():raise UpdateError('Загрузка обновления отменена.')
     chunk=response.read(256*1024)
@@ -105,12 +109,20 @@ def download_release(release,cache,current_version,on_progress=lambda done,total
 
 # This helper runs outside the app process, waits for its exit, installs, and
 # reopens the same executable. Arguments are data in base64 JSON, never PS code.
-INSTALL_SCRIPT=r'''
+HASH_SCRIPT=r'''
+function Get-AtlasFileHash([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
+    finally { $stream.Dispose(); $algorithm.Dispose() }
+}
+'''
+INSTALL_SCRIPT=HASH_SCRIPT+r'''
 $ErrorActionPreference = 'Stop'
 try {
     $parent = Get-Process -Id $update.parentPid -ErrorAction SilentlyContinue
     if ($parent -and -not $parent.WaitForExit(120000)) { throw 'Приложение не закрылось. Установка отменена.' }
-    if ((Get-FileHash -LiteralPath $update.installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $update.sha256) { throw 'Контрольная сумма установщика изменилась. Установка отменена.' }
+    if ((Get-AtlasFileHash $update.installer) -ne $update.sha256) { throw 'Контрольная сумма установщика изменилась. Установка отменена.' }
     $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/SP-', '/NORESTART', '/RESTARTEXITCODE=3010', ('/DIR="' + $update.directory + '"'), ('/LOG="' + $update.log + '"'))
     $installer = Start-Process -FilePath $update.installer -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
     if ($installer.ExitCode -ne 0) { throw ('Установщик завершился с кодом ' + $installer.ExitCode + '. Установка не завершена; попробуйте обновить ещё раз.') }
@@ -130,6 +142,15 @@ def helper_script(payload):
  encoded=base64.b64encode(json.dumps(payload,ensure_ascii=False).encode('utf8')).decode('ascii')
  return "$update = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"+encoded+"')) | ConvertFrom-Json\n"+INSTALL_SCRIPT
 
+def _spawn_helper(script,directory):
+ # Windows PowerShell silently skips EncodedCommand with DETACHED_PROCESS.
+ # CREATE_NO_WINDOW hides the helper while allowing its command to execute.
+ encoded=base64.b64encode(script.encode('utf-16-le')).decode('ascii')
+ powershell=Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
+ if not powershell.is_file():raise UpdateError('Не найден Windows PowerShell для установки обновления.')
+ with (Path(directory)/'helper.log').open('wb') as log:
+  return subprocess.Popen([str(powershell),'-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',encoded],cwd=directory,creationflags=subprocess.CREATE_NO_WINDOW,stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT)
+
 def install_release(installer,release,cache,executable=None,parent_pid=None):
  if sys.platform!='win32':raise UpdateError('Автоматическая установка доступна в Windows.')
  if executable is None and not getattr(sys,'frozen',False):raise UpdateError('Обновление устанавливается из EXE-версии приложения.')
@@ -137,9 +158,6 @@ def install_release(installer,release,cache,executable=None,parent_pid=None):
  update_root=Path(cache).resolve()/'updates';installer=Path(installer).resolve()
  if executable.name!='MorrowindAtlas.exe' or installer.parent!=update_root or installer.name!=release.filename or not installer.is_file() or installer.stat().st_size!=release.size or file_digest(installer)!=release.sha256:raise UpdateError('Не удалось подтвердить файл обновления.')
  payload={'parentPid':parent_pid or os.getpid(),'installer':str(installer),'sha256':release.sha256,'directory':str(directory),'executable':str(executable),'version':release.version,'log':str(update_root/'install.log'),'result':str(update_root/'result.json')}
- encoded=base64.b64encode(helper_script(payload).encode('utf-16-le')).decode('ascii')
- powershell=Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
- if not powershell.is_file():raise UpdateError('Не найден Windows PowerShell для установки обновления.')
  try:
-  return subprocess.Popen([str(powershell),'-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',encoded],cwd=update_root,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.DETACHED_PROCESS,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  return _spawn_helper(helper_script(payload),update_root)
  except OSError as error:raise UpdateError('Не удалось запустить установщик. Программа остаётся открытой.') from error
