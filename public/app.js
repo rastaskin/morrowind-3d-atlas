@@ -1,7 +1,7 @@
 import { loadLore, renderLore } from './lore.js';
 import { Atlas3D } from './map3d.js';
 import { ProgressStore } from './progress.js';
-import { parseOpenMWSave } from './save-parser.js';
+import { parseMorrowindSave, matchVisitedLocations } from './save-parser.js';
 const demo=new URLSearchParams(location.search).has('demo');
 const store=new ProgressStore(localStorage);
 const $=id=>document.getElementById(id),canvas=$('map');
@@ -31,18 +31,17 @@ $('saveFile').addEventListener('change',async event=>{
  try{
   ensureEditable();if(file.size>512*1024*1024)throw Error('Сохранение больше 512 МБ.');
   $('saveInfo').textContent='Читаю сохранение локально…';
-  const report=await parseOpenMWSave(await file.arrayBuffer(),{onProgress:n=>$('saveInfo').textContent=`Проверено интерьеров: ${n}`});
-  const byName=new Map();for(const r of catalog){const k=r.en.toLowerCase();if(!byName.has(k))byName.set(k,[]);byName.get(k).push(r.id)}
-  const ids=[];let skipped=0;for(const name of report.visited){const match=byName.get(name.toLowerCase());if(match?.length===1)ids.push(match[0]);else skipped++;}
+  const report=await parseMorrowindSave(await file.arrayBuffer(),{onProgress:n=>$('saveInfo').textContent=`Проверено интерьеров: ${n}`});
+  const {ids,skipped}=matchVisitedLocations(report,catalog);
   const added=store.markVisited(ids);reloadProgress();
-  $('saveInfo').textContent=`Новых посещений: ${added} · найдено в каталоге: ${ids.length} · без соответствия: ${skipped}`;
+  $('saveInfo').textContent=`${report.source==='Morrowind'?'Morrowind .ess':'OpenMW .omwsave'} · Новых посещений: ${added} · найдено в каталоге: ${ids.length} · без соответствия: ${skipped}`;
   toast('Посещения импортированы. Зачистки и заметки сохранены.');
  }catch(e){$('saveInfo').textContent='Импорт не выполнен. Прогресс сохранён.';toast(e.message)}
  finally{input.disabled=false;input.value=''}
 });
 $('exportProgress').onclick=()=>{try{ensureEditable();const blob=new Blob([JSON.stringify(store.export(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='morrowind-atlas.progress.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){toast(e.message)}};
 $('importProgress').addEventListener('change',async event=>{const input=event.target,file=input.files?.[0];if(!file)return;try{ensureEditable();if(file.size>5*1024*1024)throw Error('Файл прогресса больше 5 МБ.');const count=store.import(JSON.parse(await file.text()));reloadProgress();toast(`Импортированы отметки для ${count} локаций.`)}catch(e){toast(e.message)}finally{input.value=''}});
-$('resetProgress').onclick=()=>{try{ensureEditable();if(confirm('Удалить все отметки и заметки в этом браузере? Сначала можно экспортировать резервную копию.')){store.clear();reloadProgress();$('saveInfo').textContent='OpenMW .omwsave · обработка в браузере';toast('Прогресс очищен.')}}catch(e){toast(e.message)}};
+$('resetProgress').onclick=()=>{try{ensureEditable();if(confirm('Удалить все отметки и заметки в этом браузере? Сначала можно экспортировать резервную копию.')){store.clear();reloadProgress();$('saveInfo').textContent='Morrowind .ess / OpenMW .omwsave · локально';toast('Прогресс очищен.')}}catch(e){toast(e.message)}};
 view=new Atlas3D(canvas,{onSelect:r=>select(r),onStatus:toast});
 new ResizeObserver(resize).observe($('maparea'));
 (async()=>{try{const [response,loreResult]=await Promise.all([fetch('./catalog.json'),loadLore().catch(()=>null)]);lore=loreResult;if(!response.ok)throw Error('Каталог локаций недоступен.');data=await response.json();catalog=data.locations;store.bindCatalog(catalog);

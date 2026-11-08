@@ -9,6 +9,6 @@
 - Browser storage is tied to the origin. The same browser profile is shared storage: this application does not provide separate authenticated users. Export a backup before clearing site data.
 - Progress exports can contain notes entered by their owner. Treat these JSON files as private when sharing screenshots, logs or Git changes.
 - The public repository starts with no player progress. Documentation screenshots use deterministic fictional demo marks and are labelled as demonstrations.
-- Generated game assets, save files, fonts, environment files and local fixture output are ignored by Git. Publication checks inspect the candidate source tree; review staged changes before publishing future updates.
+- Generated game assets, save files, user-provided fonts, environment files and local fixture output are ignored by Git. The unmodified MysticCards font is bundled under SIL OFL 1.1 with its license and source attribution. It loads locally, without an OS font installation or a font CDN. Publication checks inspect the candidate source tree; review staged changes before publishing future updates.
 
 The application is a local static viewer, not an online service. Any deployment by a third party has its own hosting policies. This document describes the code shipped in this repository.

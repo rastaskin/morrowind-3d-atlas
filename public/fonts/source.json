@@ -1,0 +1,11 @@
+{
+  "name": "MysticCards",
+  "authors": "OpenMW Team; based on Pelagiad by Isak Larborn",
+  "license": "SIL Open Font License 1.1",
+  "upstream": "https://github.com/OpenMW/openmw",
+  "commit": "8d0dcb774f60321b881063be5c4fe8f5d6008eb1",
+  "file": "MysticCards.ttf",
+  "source": "https://github.com/OpenMW/openmw/blob/8d0dcb774f60321b881063be5c4fe8f5d6008eb1/files/data/fonts/MysticCards.ttf",
+  "sha256": "7e9025faddb1f4eb93716f6110338b20cca73b9bc5d207549c125cd72bce8d20",
+  "modified": false
+}

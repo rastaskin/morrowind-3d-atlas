@@ -12,6 +12,7 @@ public/ui/
 *.tex
 *.fnt
 *.ttf
+!public/fonts/MysticCards.ttf
 *.woff2
 *.progress.json
 *snapshot*.json

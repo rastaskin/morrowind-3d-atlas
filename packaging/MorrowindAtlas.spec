@@ -8,6 +8,8 @@ for name in ['index.html','app.js','map3d.js','progress.js','save-parser.js','lo
     data.append((str(root/'public'/name),'bundle-public'))
 for name in ['three.module.js','three.core.js','OrbitControls.js','LICENSE-three.txt']:
     data.append((str(root/'public/vendor'/name),'bundle-public/vendor'))
+for name in ['MysticCards.ttf','MysticCardsFontLicense.txt','source.json']:
+    data.append((str(root/'public/fonts'/name),'bundle-public/fonts'))
 for name in ['game_assets.py','build_3d.py','build_detail.py','prepare_ui.py']:
     data.append((str(root/'scripts'/name),'scripts'))
 data += collect_data_files('pyffi')

@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import unquote,urlsplit
 from updater import check_latest,download_release,install_release,UpdateError
 
-VERSION='1.3.1'
+VERSION='1.4.0'
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/'bundle-public' if getattr(sys,'frozen',False) else ROOT/'public'
 SCRIPTS=ROOT/'scripts'
@@ -23,8 +23,6 @@ def worker(args):
   missing=[name+ext for name in ['Morrowind','Tribunal','Bloodmoon']for ext in ['.esm','.bsa']if not (game/(name+ext)).is_file()]
   if missing:raise ValueError('Не найдены файлы GOTY: '+', '.join(missing))
   os.environ['MORROWIND_DATA_DIR']=str(game);os.environ['ATLAS_OUTPUT_DIR']=str(args.output.resolve())
-  if args.font:os.environ['ATLAS_FONT_PATH']=str(args.font.resolve())
-  else:os.environ.pop('ATLAS_FONT_PATH',None)
   sys.path.insert(0,str(SCRIPTS))
   for name in ['build_3d.py','build_detail.py','prepare_ui.py']:runpy.run_path(str(SCRIPTS/name),run_name='__main__')
   write_json(args.output/'ready.json',{'schema':1,'appVersion':VERSION})
@@ -47,9 +45,11 @@ def self_test(args):
   assert (PUBLIC/'index.html').is_file() and (SCRIPTS/'build_3d.py').is_file()
   assert (PUBLIC/'catalog.json').is_file() and np.isfinite(np.array([1.,2.])).all()
   assert (PUBLIC/'lore.js').is_file()
+  bundled_font=TTFont(PUBLIC/'fonts/MysticCards.ttf');glyphs=bundled_font.getBestCmap()
+  assert all(ord(character) in glyphs for character in 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя')
   lore=json.loads((PUBLIC/'lore.json').read_text(encoding='utf8'));assert lore['schema']==1 and len(lore['entries'])>0
   im=Image.new('RGBA',(32,32),(0,0,0,0));buf=io.BytesIO();im.save(buf,format='PNG');assert Image.open(io.BytesIO(buf.getvalue())).size==(32,32)
-  checks=['bundled UI','bundled lore','numpy','Pillow PNG','fontTools','NIF schema','Tk']
+  checks=['bundled UI','bundled lore','bundled Cyrillic font','numpy','Pillow PNG','fontTools','NIF schema','Tk']
   if args.data_files:
    os.environ['MORROWIND_DATA_DIR']=str(args.data_files.resolve());sys.path.insert(0,str(SCRIPTS));from game_assets import Assets
    assets=Assets();old=N.NiGeometryData.__init__
@@ -106,11 +106,11 @@ def launch(args):
  update_status=tk.StringVar(value='Проверка на GitHub — только по кнопке.')
  ttk.Label(frame,textvariable=update_status,wraplength=615).pack(anchor='w')
  update_bar=ttk.Progressbar(frame,mode='determinate',maximum=100);update_bar.pack(fill='x',pady=(5,12))
- game_var=tk.StringVar();font_var=tk.StringVar();status=tk.StringVar(value='Выберите оригинальную папку Data Files из Morrowind GOTY.')
+ game_var=tk.StringVar();status=tk.StringVar(value='Выберите оригинальную папку Data Files из Morrowind GOTY.')
  def folder_row(title,var,command):
   ttk.Label(frame,text=title).pack(anchor='w');row=ttk.Frame(frame);row.pack(fill='x',pady=(4,10));ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(row,text='Выбрать…',command=command).pack(side='left',padx=(8,0))
  folder_row('Папка игры: Data Files',game_var,lambda:game_var.set(filedialog.askdirectory(title='Выберите папку Data Files') or game_var.get()))
- folder_row('Шрифт Magic Cards с кириллицей — необязательно',font_var,lambda:font_var.set(filedialog.askopenfilename(title='Необязательный шрифт',filetypes=[('TrueType font','*.ttf')]) or font_var.get()))
+ ttk.Label(frame,text='Шрифт карты: MysticCards с кириллицей — встроен.',wraplength=615).pack(anchor='w',pady=(0,12))
  actions=ttk.Frame(frame);actions.pack(fill='x',pady=(0,12));events=queue.Queue();state={'server':None,'process':None,'active':None,'update_busy':False,'available_update':None};cancel_update=threading.Event()
  active=cache/'releases'/str(config.get('active',''))/'public'
  if active.resolve().is_relative_to(cache) and (active/'ready.json').is_file():state['active']=active;status.set('Ресурсы подготовлены. Можно открыть карту.')
@@ -151,12 +151,9 @@ def launch(args):
   game=Path(game_var.get())
   missing=[n+e for n in ['Morrowind','Tribunal','Bloodmoon']for e in ['.esm','.bsa']if not (game/(n+e)).is_file()]
   if missing:return messagebox.showerror('Папка игры','Нужны оригинальные английские ESM/BSA GOTY:\n'+', '.join(missing))
-  font=Path(font_var.get()) if font_var.get() else None
-  if font and not font.is_file():return messagebox.showerror('Шрифт','Выбранный файл шрифта не найден.')
   release=datetime.datetime.now().strftime('%Y%m%d-%H%M%S');staging=cache/'staging'/release/'public';staging.mkdir(parents=True,exist_ok=True);report=staging.parent/'result.json';log=cache/'prepare.log'
   command=[sys.executable] if getattr(sys,'frozen',False) else [sys.executable,str(Path(__file__).resolve())]
   command+=['--prepare','--data-files',str(game.resolve()),'--output',str(staging),'--report',str(report),'--log',str(log)]
-  if font:command+=['--font',str(font.resolve())]
   try:state['process']=subprocess.Popen(command,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
   except OSError as e:return messagebox.showerror('Не удалось начать',str(e))
   prepare_button.state(['disabled']);open_button.state(['disabled']);update_button.state(['disabled']);status.set('Подготовка ресурсов. Это займёт несколько минут…');bar.start()

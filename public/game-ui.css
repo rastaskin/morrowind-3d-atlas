@@ -1,4 +1,4 @@
-@font-face{font-family:MagicCards;src:url('./ui/Magic-Cards-Cyr.woff2') format('woff2');font-weight:400 700;font-style:normal;font-display:swap}
+@font-face{font-family:MagicCards;src:url('./fonts/MysticCards.ttf') format('truetype');font-weight:400 700;font-style:normal;font-display:swap}
 :root{--mw-text:#cbb58b;--mw-bright:#f1d7a1;--mw-muted:#a3987f;--mw-gold:#b69b68;--mw-surface:rgba(8,8,7,.94);--mw-edge:#796745;--mw-frame:url('./ui/menu_thick_border.png');--mw-thin:url('./ui/menu_thin_border.png');--mw-button:url('./ui/menu_button_frame.png')}
 html,body{font-family:MagicCards,Georgia,serif;font-size:21px;line-height:1.15;color:var(--mw-text);background:#090908;color-scheme:dark}
 button,input,select,textarea{font-family:MagicCards,Georgia,serif;font-weight:400;font-size:20px;line-height:1.15;color:var(--mw-text);border-radius:0;text-shadow:1px 1px #000}

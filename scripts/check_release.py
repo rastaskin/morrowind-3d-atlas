@@ -1,6 +1,6 @@
 """Audit exactly the source files eligible for Git publication, not ignored runtime data."""
 from pathlib import Path
-import subprocess,re,json,sys,os
+import subprocess,re,json,sys,os,hashlib
 ROOT=Path(__file__).resolve().parents[1]
 def files():
  out=subprocess.check_output(['git','ls-files','-z','--cached','--others','--exclude-standard'],cwd=ROOT)
@@ -12,7 +12,13 @@ issues=[];listed=files()
 for rel in listed:
  p=ROOT/rel
  if not p.is_file():continue
- if p.suffix.lower() in forbidden or rel.parts[:2] in [('public','assets3d'),('public','ui')]:issues.append(str(rel)+': private/generated game resource')
+ is_bundled_font=rel.as_posix()=='public/fonts/MysticCards.ttf'
+ if is_bundled_font:
+  source=json.loads((ROOT/'public/fonts/source.json').read_text(encoding='utf8'))
+  assert source['license']=='SIL Open Font License 1.1' and source['modified'] is False
+  assert hashlib.sha256(p.read_bytes()).hexdigest()==source['sha256'],'Bundled font differs from credited upstream file'
+  assert (ROOT/'public/fonts/MysticCardsFontLicense.txt').is_file()
+ if (p.suffix.lower() in forbidden and not is_bundled_font) or rel.parts[:2] in [('public','assets3d'),('public','ui')]:issues.append(str(rel)+': private/generated game resource')
  if p.suffix.lower() in {'.png','.jpg','.webp'}:continue
  try:s=p.read_text(encoding='utf8')
  except UnicodeDecodeError:continue

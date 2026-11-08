@@ -2,7 +2,6 @@
 from pathlib import Path
 import os
 from PIL import Image
-from fontTools.ttLib import TTFont
 from game_assets import Assets
 import io,json
 ROOT=Path(os.environ['ATLAS_OUTPUT_DIR']);OUT=ROOT/'ui';OUT.mkdir(exist_ok=True);assets=Assets();manifest=[]
@@ -17,7 +16,5 @@ def frame(stem,size):
 frame('menu_thick_border',4);frame('menu_thin_border',2);frame('menu_button_frame',4)
 for name in ['menu_rightbuttonup_center','menu_rightbuttondown_center','menu_head_block_middle','menu_scroll_bar_vert','menu_scroll_elevator']:
  img(name).save(OUT/(name+'.png'));manifest.append(name)
-if os.environ.get('ATLAS_FONT_PATH'):
- font=TTFont(os.environ['ATLAS_FONT_PATH']);font.flavor='woff2';font.save(OUT/'Magic-Cards-Cyr.woff2')
-(OUT/'sources.json').write_text(json.dumps({'textures':'Local original Morrowind.bsa','frames':manifest,'font':'Optional user-supplied Magic Cards Cyrillic font','font_source':'https://www.fullrest.ru/files/magic_cards_cyrllic2'},ensure_ascii=False,indent=2),encoding='utf8')
-print('Prepared original frames, buttons and Cyrillic Magic Cards WOFF2')
+(OUT/'sources.json').write_text(json.dumps({'textures':'Local original Morrowind.bsa','frames':manifest,'font':'MysticCards, bundled with the application under SIL OFL 1.1','font_source':'https://github.com/OpenMW/openmw/tree/master/files/data/fonts'},ensure_ascii=False,indent=2),encoding='utf8')
+print('Prepared original frames and buttons. The map font is bundled with the application.')
