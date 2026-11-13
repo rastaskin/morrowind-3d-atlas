@@ -23,7 +23,7 @@ export function resolveLore(location,data){
   }
  }
  if(best)return best;
- let key=game==='Bloodmoon'?'solstheim':game==='Tribunal'?'mournhold':'vvardenfell',scope='world';
+ let key=game==='Tamriel Rebuilt'?'tamriel-rebuilt':game==='Bloodmoon'?'solstheim':game==='Tribunal'?'mournhold':'vvardenfell',scope='world';
  if(game==='Morrowind'){
   if(/\bancestral tomb$/.test(name)){key='ancestral-tomb';scope='tradition'}
   else if(/\begg mine(?:,|:|$)/.test(name)){key='egg-mine';scope='tradition'}
@@ -34,7 +34,7 @@ export function resolveLore(location,data){
 }
 
 function safeSource(source){
- try{const url=new URL(source.url);return url.protocol==='https:'&&url.hostname==='en.uesp.net'&&url.pathname.startsWith('/wiki/')?source:null}catch{return null}
+ try{const url=new URL(source.url);return url.protocol==='https:'&&((url.hostname==='en.uesp.net'&&url.pathname.startsWith('/wiki/'))||url.hostname==='www.tamriel-rebuilt.org')?source:null}catch{return null}
 }
 
 export function renderLore(location,data){

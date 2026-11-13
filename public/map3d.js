@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
+import { hideEditorModels } from './world-models.js';
 const $=id=>document.getElementById(id),UNIT=819.2;
 export class Atlas3D {
  constructor(canvas,options){
@@ -54,7 +55,7 @@ export class Atlas3D {
   this.water.rotation.x=-Math.PI/2;this.water.position.y=-.025;this.scene.add(this.water);
  }
  async loadWorld(){try{
-  let res=await fetch('./assets3d/world.json');if(!res.ok)throw Error('Данные 3D ещё не собраны');this.world=await res.json();this.detailAtlas=await this.texture('terrain-atlas.webp');this.detailAtlas.generateMipmaps=true;
+  let res=await fetch('./assets3d/world.json');if(!res.ok)throw Error('Данные 3D ещё не собраны');this.world=hideEditorModels(await res.json());this.detail=await fetch('./assets3d/detail.json').then(r=>r.ok?r.json():{});this.detailAtlas=await this.texture('terrain-atlas.webp');this.detailAtlas.generateMipmaps=true;
   for(let t of this.world.terrain){let tile={...t,geometry:null,mesh:null,full:false};tile.mesh=this.makeTerrain(tile,9,new Float32Array(t.h),t.c);this.terrainRoot.add(tile.mesh);this.tiles.set(t.key,tile)}
   this.instancesByCell=new Map();for(let r of this.world.instances){let key=r[8]+','+r[9];if(!this.instancesByCell.has(key))this.instancesByCell.set(key,[]);this.instancesByCell.get(key).push(r)}
   this.ready=true;$('load3d').hidden=true;this.updatePoints();this.lastObjects=null;this.dirty=true;if(this.selected?.position)this.focus(this.selected);else this.flyTo(new THREE.Vector3(-25,1.5,22),38);
@@ -68,10 +69,10 @@ export class Atlas3D {
   let res=await fetch(`./assets3d/terrain/${tile.key}.bin`);if(!res.ok)throw Error('Tile unavailable');let h=new Float32Array(await res.arrayBuffer());if(h.length!==4225)throw Error('Invalid height tile');for(let i=0;i<h.length;i++)h[i]/=UNIT;tile.heights=h;let mesh=this.makeTerrain(tile,65,h);
   let indexMap=await new THREE.TextureLoader().loadAsync(`./assets3d/terrain/${tile.key}-index.png`),tintMap=await this.texture(`terrain/${tile.key}-tint.png`);indexMap.colorSpace=THREE.NoColorSpace;indexMap.magFilter=indexMap.minFilter=THREE.NearestFilter;indexMap.generateMipmaps=false;
   mesh.material.vertexColors=false;mesh.material.map=this.detailAtlas;mesh.material.onBeforeCompile=shader=>{
-   shader.uniforms.landIndex={value:indexMap};shader.uniforms.landTint={value:tintMap};
-   shader.fragmentShader='uniform sampler2D landIndex;\nuniform sampler2D landTint;\n'+shader.fragmentShader;
-   shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`vec2 lp=vMapUv*16.-.5;vec2 lb=floor(lp);vec2 lf=smoothstep(0.,1.,fract(lp));vec2 lt=fract(vMapUv*16.);vec4 samples[4];for(int k=0;k<4;k++){vec2 corner=vec2(float(k-k/2*2),float(k/2));float li=floor(texture2D(landIndex,(clamp(lb+corner,vec2(0.),vec2(15.))+.5)/16.).r*255.+.5);vec2 auv=(vec2(mod(li,16.),15.-floor(li/16.))+mix(vec2(.002),vec2(.998),lt))/16.;samples[k]=texture2D(map,auv);}diffuseColor*=mix(mix(samples[0],samples[1],lf.x),mix(samples[2],samples[3],lf.x),lf.y)*texture2D(landTint,vMapUv);`);
-  };mesh.material.customProgramCacheKey=()=> 'morrowind-land-v1';mesh.material.needsUpdate=true;tile.indexMap=indexMap;this.terrainRoot.remove(tile.mesh);tile.mesh.geometry.dispose();tile.mesh.material.dispose();tile.mesh=mesh;tile.full=true;tile.used=performance.now();this.terrainRoot.add(mesh);this.updatePoints();
+   shader.uniforms.landIndex={value:indexMap};shader.uniforms.landTint={value:tintMap};shader.uniforms.landGrid={value:this.detail.grid||16};shader.uniforms.landIndexChannels={value:this.detail.indexChannels||1};
+   shader.fragmentShader='uniform sampler2D landIndex;\nuniform sampler2D landTint;\nuniform float landGrid;\nuniform float landIndexChannels;\n'+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`vec2 lp=vMapUv*16.-.5;vec2 lb=floor(lp);vec2 lf=smoothstep(0.,1.,fract(lp));vec2 lt=fract(vMapUv*16.);vec4 samples[4];for(int k=0;k<4;k++){vec2 corner=vec2(float(k-k/2*2),float(k/2));vec4 encoded=texture2D(landIndex,(clamp(lb+corner,vec2(0.),vec2(15.))+.5)/16.);float li=floor(encoded.r*255.+.5)+(landIndexChannels>1.?floor(encoded.g*255.+.5)*256.:0.);vec2 auv=(vec2(mod(li,landGrid),landGrid-1.-floor(li/landGrid))+mix(vec2(.002),vec2(.998),lt))/landGrid;samples[k]=texture2D(map,auv);}diffuseColor*=mix(mix(samples[0],samples[1],lf.x),mix(samples[2],samples[3],lf.x),lf.y)*texture2D(landTint,vMapUv);`);
+  };mesh.material.customProgramCacheKey=()=> 'morrowind-land-v2';mesh.material.needsUpdate=true;tile.indexMap=indexMap;this.terrainRoot.remove(tile.mesh);tile.mesh.geometry.dispose();tile.mesh.material.dispose();tile.mesh=mesh;tile.full=true;tile.used=performance.now();this.terrainRoot.add(mesh);this.updatePoints();
  }catch(e){console.warn('Terrain:',tile.key,e.message)}finally{tile.loading=false}}
  texture(path){if(!this.textureCache.has(path)){let p=new THREE.TextureLoader().loadAsync('./assets3d/'+path).then(t=>{t.colorSpace=THREE.SRGBColorSpace;if(path.startsWith('textures/'))t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=Math.min(8,this.renderer.capabilities.getMaxAnisotropy());return t});this.textureCache.set(path,p)}return this.textureCache.get(path)}
  height(x,y){let cx=Math.floor(x),cy=Math.floor(y),t=this.tiles.get(cx+'_'+cy);if(!t)return 0;let n=t.heights?65:9,h=t.heights||t.h,fx=(x-cx)*(n-1),fy=(y-cy)*(n-1),ix=Math.min(n-2,Math.floor(fx)),iy=Math.min(n-2,Math.floor(fy)),dx=fx-ix,dy=fy-iy;return h[iy*n+ix]*(1-dx)*(1-dy)+h[iy*n+ix+1]*dx*(1-dy)+h[(iy+1)*n+ix]*(1-dx)*dy+h[(iy+1)*n+ix+1]*dx*dy}

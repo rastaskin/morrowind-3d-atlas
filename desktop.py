@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import unquote,urlsplit
 from updater import check_latest,download_release,install_release,UpdateError
 
-VERSION='1.4.0'
+VERSION='1.5.0'
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/'bundle-public' if getattr(sys,'frozen',False) else ROOT/'public'
 SCRIPTS=ROOT/'scripts'
@@ -13,6 +13,12 @@ PORT=8768
 
 def write_json(path,data):
  path.parent.mkdir(parents=True,exist_ok=True);temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf8');temp.replace(path)
+
+def stop_preparation(process):
+ """Stop only this launcher's preparation process and its export workers."""
+ if os.name=='nt':
+  subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+ else:process.terminate()
 
 def worker(args):
  """Separate process: game processing never blocks the launcher UI."""
@@ -24,8 +30,11 @@ def worker(args):
   if missing:raise ValueError('Не найдены файлы GOTY: '+', '.join(missing))
   os.environ['MORROWIND_DATA_DIR']=str(game);os.environ['ATLAS_OUTPUT_DIR']=str(args.output.resolve())
   sys.path.insert(0,str(SCRIPTS))
+  from atlas_profile import resolve_profile
+  profile=resolve_profile(game,tamriel_rebuilt=args.tamriel_rebuilt,data_dirs=args.data_dir,openmw_config=args.openmw_config)
+  profile_path=args.output.parent/'inputs.local.json';write_json(profile_path,profile);os.environ['ATLAS_PROFILE']=str(profile_path);os.environ['ATLAS_BASE_CATALOG']=str(PUBLIC/'catalog.json')
   for name in ['build_3d.py','build_detail.py','prepare_ui.py']:runpy.run_path(str(SCRIPTS/name),run_name='__main__')
-  write_json(args.output/'ready.json',{'schema':1,'appVersion':VERSION})
+  write_json(args.output/'ready.json',{'schema':1,'appVersion':VERSION,'tamrielRebuilt':profile['tamrielRebuilt']})
   if args.report:write_json(args.report,{'ok':True,'version':VERSION})
   return 0
  except Exception as error:
@@ -42,9 +51,9 @@ def self_test(args):
   from fontTools.ttLib import TTFont
   from pyffi.formats.nif import NifFormat as N
   import tkinter
-  assert (PUBLIC/'index.html').is_file() and (SCRIPTS/'build_3d.py').is_file()
+  assert (PUBLIC/'index.html').is_file() and all((SCRIPTS/name).is_file() for name in ['build_3d.py','atlas_profile.py','world_data.py'])
   assert (PUBLIC/'catalog.json').is_file() and np.isfinite(np.array([1.,2.])).all()
-  assert (PUBLIC/'lore.js').is_file()
+  assert (PUBLIC/'lore.js').is_file() and (PUBLIC/'world-models.js').is_file()
   bundled_font=TTFont(PUBLIC/'fonts/MysticCards.ttf');glyphs=bundled_font.getBestCmap()
   assert all(ord(character) in glyphs for character in 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя')
   lore=json.loads((PUBLIC/'lore.json').read_text(encoding='utf8'));assert lore['schema']==1 and len(lore['entries'])>0
@@ -72,6 +81,7 @@ def make_handler(generated):
   def translate_path(self,path):
    route=unquote(urlsplit(path).path).lstrip('/')
    base=generated if route.startswith(('assets3d/','ui/')) else PUBLIC
+   if route=='assets3d/catalog.json' and not (generated/route).is_file():return str(PUBLIC/'catalog.json')
    candidate=(base/(route or 'index.html')).resolve()
    return str(candidate) if candidate.is_relative_to(base.resolve()) else str(PUBLIC/'__not_found__')
   def do_GET(self):
@@ -95,8 +105,17 @@ def launch(args):
  config_path=cache/'config.local.json'
  try:config=json.loads(config_path.read_text(encoding='utf8'))
  except (OSError,ValueError):config={}
- root=tk.Tk();root.title('Morrowind 3D Atlas');root.geometry('680x540');root.minsize(620,520);root.configure(bg='#11100d')
- style=ttk.Style();style.theme_use('clam');style.configure('TFrame',background='#11100d');style.configure('TLabel',background='#11100d',foreground='#d9c49a',font=('Segoe UI',11));style.configure('TButton',font=('Segoe UI',10),padding=7);style.configure('Title.TLabel',font=('Segoe UI',20),foreground='#ecd6a8')
+ root=tk.Tk();root.title('Morrowind 3D Atlas');root.geometry('740x780');root.minsize(700,750);root.configure(bg='#11100d')
+ font_family='MysticCards'
+ if os.name=='nt':
+  import ctypes,atexit
+  font_path=str(PUBLIC/'fonts/MysticCards.ttf')
+  ctypes.windll.gdi32.AddFontResourceExW(font_path,0x10,0)
+  atexit.register(lambda:ctypes.windll.gdi32.RemoveFontResourceExW(font_path,0x10,0))
+  from fontTools.ttLib import TTFont
+  with TTFont(font_path) as bundled_font:font_family=bundled_font['name'].getDebugName(1) or font_family
+ root.option_add('*Font',(font_family,13))
+ style=ttk.Style();style.theme_use('clam');style.configure('TFrame',background='#11100d');style.configure('TLabel',background='#11100d',foreground='#d9c49a',font=(font_family,13));style.configure('TButton',font=(font_family,13),padding=7);style.configure('TEntry',font=(font_family,13));style.configure('TCheckbutton',background='#11100d',foreground='#d9c49a',font=(font_family,13));style.configure('Title.TLabel',font=(font_family,22),foreground='#ecd6a8')
  frame=ttk.Frame(root,padding=24);frame.pack(fill='both',expand=True)
  ttk.Label(frame,text='Morrowind 3D Atlas',style='Title.TLabel').pack(anchor='w')
  ttk.Label(frame,text='Локальная карта · без аккаунтов и загрузки сохранений в сеть',wraplength=620).pack(anchor='w',pady=(5,15))
@@ -106,10 +125,15 @@ def launch(args):
  update_status=tk.StringVar(value='Проверка на GitHub — только по кнопке.')
  ttk.Label(frame,textvariable=update_status,wraplength=615).pack(anchor='w')
  update_bar=ttk.Progressbar(frame,mode='determinate',maximum=100);update_bar.pack(fill='x',pady=(5,12))
- game_var=tk.StringVar();status=tk.StringVar(value='Выберите оригинальную папку Data Files из Morrowind GOTY.')
+ sources=config.get('sources',{})
+ game_var=tk.StringVar(value=sources.get('game',''));status=tk.StringVar(value='Выберите оригинальную папку Data Files из Morrowind GOTY.')
  def folder_row(title,var,command):
   ttk.Label(frame,text=title).pack(anchor='w');row=ttk.Frame(frame);row.pack(fill='x',pady=(4,10));ttk.Entry(row,textvariable=var).pack(side='left',fill='x',expand=True);ttk.Button(row,text='Выбрать…',command=command).pack(side='left',padx=(8,0))
  folder_row('Папка игры: Data Files',game_var,lambda:game_var.set(filedialog.askdirectory(title='Выберите папку Data Files') or game_var.get()))
+ tr_var=tk.BooleanVar(value=sources.get('tamrielRebuilt',False));cfg_var=tk.StringVar(value=sources.get('openmwConfig',''))
+ ttk.Checkbutton(frame,text='Добавить Tamriel Rebuilt',variable=tr_var).pack(anchor='w',pady=(0,8))
+ folder_row('Конфигурация OpenMW: openmw.cfg (для TR из другой папки)',cfg_var,lambda:cfg_var.set(filedialog.askopenfilename(title='Выберите openmw.cfg',filetypes=[('OpenMW','*.cfg')]) or cfg_var.get()))
+ ttk.Label(frame,text='TR и Tamriel_Data берутся из папки игры или каталогов OpenMW. Игровые файлы остаются без изменений.',wraplength=650).pack(anchor='w',pady=(0,8))
  ttk.Label(frame,text='Шрифт карты: MysticCards с кириллицей — встроен.',wraplength=615).pack(anchor='w',pady=(0,12))
  actions=ttk.Frame(frame);actions.pack(fill='x',pady=(0,12));events=queue.Queue();state={'server':None,'process':None,'active':None,'update_busy':False,'available_update':None};cancel_update=threading.Event()
  active=cache/'releases'/str(config.get('active',''))/'public'
@@ -154,6 +178,9 @@ def launch(args):
   release=datetime.datetime.now().strftime('%Y%m%d-%H%M%S');staging=cache/'staging'/release/'public';staging.mkdir(parents=True,exist_ok=True);report=staging.parent/'result.json';log=cache/'prepare.log'
   command=[sys.executable] if getattr(sys,'frozen',False) else [sys.executable,str(Path(__file__).resolve())]
   command+=['--prepare','--data-files',str(game.resolve()),'--output',str(staging),'--report',str(report),'--log',str(log)]
+  if tr_var.get():command+=['--tamriel-rebuilt']
+  if cfg_var.get():command+=['--openmw-config',cfg_var.get()]
+  prepared_sources={'game':str(game.resolve()),'openmwConfig':cfg_var.get(),'tamrielRebuilt':tr_var.get()}
   try:state['process']=subprocess.Popen(command,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
   except OSError as e:return messagebox.showerror('Не удалось начать',str(e))
   prepare_button.state(['disabled']);open_button.state(['disabled']);update_button.state(['disabled']);status.set('Подготовка ресурсов. Это займёт несколько минут…');bar.start()
@@ -165,7 +192,7 @@ def launch(args):
     target=cache/'releases'/release/'public';target.parent.mkdir(parents=True,exist_ok=True)
     # Both absolute directory targets must stay inside this application's cache.
     if not staging.resolve().is_relative_to(cache) or not target.resolve().is_relative_to(cache):raise RuntimeError('Неверный каталог кэша')
-    staging.rename(target);write_json(config_path,{'active':release,'schema':1});events.put(('ready',target))
+    staging.rename(target);write_json(config_path,{'active':release,'schema':1,'sources':prepared_sources});events.put(('ready',target))
    except Exception as error:events.put(('error',str(error)))
   threading.Thread(target=watch,daemon=True).start()
  prepare_button=ttk.Button(actions,text='Подготовить ресурсы',command=prepare_assets);prepare_button.pack(side='left')
@@ -204,7 +231,7 @@ def launch(args):
   process=state['process']
   if process and process.poll() is None:
    if not messagebox.askyesno('Подготовка ресурсов','Остановить подготовку и выйти? Готовый кэш будет сохранён.'):return
-   process.terminate()
+   stop_preparation(process)
   if state['server']:state['server'].shutdown();state['server'].server_close()
   root.destroy()
  root.protocol('WM_DELETE_WINDOW',close);root.after(200,poll)
@@ -212,8 +239,12 @@ def launch(args):
  root.mainloop();return 0
 
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--prepare',action='store_true');parser.add_argument('--self-test',action='store_true');parser.add_argument('--serve-only',action='store_true');parser.add_argument('--auto-open',action='store_true');parser.add_argument('--data-files',type=Path);parser.add_argument('--output',type=Path);parser.add_argument('--font',type=Path);parser.add_argument('--report',type=Path);parser.add_argument('--log',type=Path);parser.add_argument('--cache-dir',type=Path);parser.add_argument('--port',type=int,default=PORT);args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--prepare',action='store_true');parser.add_argument('--self-test',action='store_true');parser.add_argument('--serve-only',action='store_true');parser.add_argument('--auto-open',action='store_true');parser.add_argument('--data-files',type=Path);parser.add_argument('--output',type=Path);parser.add_argument('--font',type=Path);parser.add_argument('--report',type=Path);parser.add_argument('--log',type=Path);parser.add_argument('--cache-dir',type=Path);parser.add_argument('--port',type=int,default=PORT);parser.add_argument('--tamriel-rebuilt',action='store_true');parser.add_argument('--openmw-config',type=Path);parser.add_argument('--data-dir',type=Path,action='append',default=[]);parser.add_argument('--export-models',action='store_true',help=argparse.SUPPRESS);parser.add_argument('--batch',type=Path,help=argparse.SUPPRESS);args=parser.parse_args()
  if args.self_test:return self_test(args)
+ if args.export_models:
+  if not args.batch:parser.error('--export-models requires --batch')
+  sys.path.insert(0,str(SCRIPTS));from nif_export import run_batch
+  run_batch(args.batch);return 0
  if args.prepare:
   if not args.data_files or not args.output:parser.error('--prepare requires --data-files and --output')
   return worker(args)

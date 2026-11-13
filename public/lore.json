@@ -1509,6 +1509,14 @@
         "Tribunal:Mournhold",
         "Tribunal:Old Mournhold"
       ]
+    },
+    {
+      "key": "tamriel-rebuilt",
+      "title": "Материковый Морровинд · Tamriel Rebuilt",
+      "summary": "Tamriel Rebuilt добавляет в Morrowind материковые земли провинции. Локации этого раздела взяты из установленной версии мода и могут отличаться от других выпусков. Эта справка описывает проект в целом; отдельная история выбранного места пока не добавлена.",
+      "sources": [
+        "TR:main-release"
+      ]
     }
   ],
   "sources": {
@@ -1991,6 +1999,10 @@
     "Morrowind:Caldera Mine": {
       "title": "UESP - Morrowind:Caldera Mine",
       "url": "https://en.uesp.net/wiki/Morrowind:Caldera_Mine"
+    },
+    "TR:main-release": {
+      "title": "Tamriel Rebuilt — официальный проект",
+      "url": "https://www.tamriel-rebuilt.org/downloads/main-release"
     }
   }
 }

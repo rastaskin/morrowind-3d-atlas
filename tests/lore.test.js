@@ -44,11 +44,16 @@ test('all bundled sources have verified host URLs and every entry has text and r
   assert.ok(entry.summary.length>80);assert.ok(entry.sources.length);
   for(const key of entry.sources){
    assert.ok(lore.sources[key]);const url=new URL(lore.sources[key].url);
-   assert.equal(url.protocol,'https:');assert.equal(url.hostname,'en.uesp.net');assert.ok(url.pathname.startsWith('/wiki/'));
+   assert.equal(url.protocol,'https:');assert.ok(url.hostname==='en.uesp.net'&&url.pathname.startsWith('/wiki/')||url.hostname==='www.tamriel-rebuilt.org');
   }
   for(const name of entry.matches||[]){const key=entry.game+':'+name.toLowerCase();assert.ok(!aliases.has(key),key);aliases.add(key)}
  }
  for(const row of catalog)assert.ok(resolveLore(row,lore)?.entry.summary,row.en);
+});
+test('TR uses its own context rather than Vvardenfell history',()=>{
+ const result=resolveLore(location('Old Ebonheart','Tamriel Rebuilt'),lore);
+ assert.equal(result.entry.key,'tamriel-rebuilt');assert.equal(result.missing,true);
+ assert.match(renderLore(location('Old Ebonheart','Tamriel Rebuilt'),lore),/www.tamriel-rebuilt.org/);
 });
 test('reference markup is escaped and unsafe external links are rejected',()=>{
  const data={entries:[{game:'Morrowind',title:'<img>',matches:['Example'],summary:'<script>alert(1)</script>',spoiler:'<b>hidden</b>',sources:['evil','safe']}],contexts:[],sources:{evil:{title:'bad',url:'javascript:alert(1)'},safe:{title:'<svg>',url:'https://en.uesp.net/wiki/Morrowind:Example'}}};

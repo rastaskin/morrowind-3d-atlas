@@ -120,7 +120,7 @@ export function matchVisitedLocations(report,catalog){
  const byName=new Map();
  for(const row of catalog){
   if(row.kind!=='Интерьер')continue;
-  for(const name of report.source==='Morrowind'?[row.en,row.name]:[row.en]){
+  for(const name of [row.en,row.name,...(row.aliases??[])]){
    if(!name)continue;const key=name.toLowerCase();if(!byName.has(key))byName.set(key,new Set());byName.get(key).add(row.id);
   }
  }
